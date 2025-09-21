@@ -1,4 +1,4 @@
-import chromium from 'chrome-aws-lambda';
+import chromium from "chrome-aws-lambda";
 
 export default async function handler(req, res) {
   const { url } = req.query;
@@ -8,42 +8,38 @@ export default async function handler(req, res) {
   }
 
   let browser = null;
+
   try {
+    // Lanzar Chromium portable de chrome-aws-lambda
     browser = await chromium.puppeteer.launch({
-      args: chromium.args,
+      args: [...chromium.args, "--hide-scrollbars", "--disable-web-security"],
       defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath,
-      headless: chromium.headless,
+      headless: true,
+      ignoreHTTPSErrors: true,
     });
 
     const page = await browser.newPage();
-    await page.setUserAgent(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
-    );
+    await page.goto(url, { waitUntil: "networkidle2" });
 
-    await page.goto(url, { waitUntil: 'networkidle2' });
+    // Verificar si existe el botón
+    const botonExiste = await page.$(".button-activar") !== null;
 
-    const boton = await page.$('form#activar-form button.button-activar');
-    const botonExiste = boton !== null;
     let botonPresionado = false;
     let enlaceBoxVisible = false;
-    let enlaceUrl = null;
 
     if (botonExiste) {
-      await boton.click();
-      botonPresionado = true;
+      // Simular click en el botón
+      await page.click(".button-activar");
 
+      // Esperar que aparezca el div "enlace-box"
       try {
-        await page.waitForSelector('div.enlace-box', { timeout: 3000 });
+        await page.waitForSelector(".enlace-box", { timeout: 5000 });
+        botonPresionado = true;
         enlaceBoxVisible = true;
-
-        const inputHandle = await page.$('div.enlace-box input#enlace');
-        if (inputHandle) {
-          enlaceUrl = await page.evaluate(input => input.value, inputHandle);
-        }
       } catch {
+        botonPresionado = true;
         enlaceBoxVisible = false;
-        enlaceUrl = null;
       }
     }
 
@@ -52,16 +48,16 @@ export default async function handler(req, res) {
       botonExiste,
       botonPresionado,
       enlaceBoxVisible,
-      enlaceUrl
     });
-
   } catch (err) {
-    res.status(500).json({
+    res.status(200).json({
       success: false,
       message: "Error al ejecutar Puppeteer",
-      error: err.message
+      error: err.message,
     });
   } finally {
-    if (browser) await browser.close();
+    if (browser !== null) {
+      await browser.close();
+    }
   }
 }
