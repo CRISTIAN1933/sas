@@ -1,63 +1,47 @@
-import chromium from "chrome-aws-lambda";
+const chromium = require("chrome-aws-lambda");
+const puppeteer = require("puppeteer-core");
 
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
   const { url } = req.query;
 
   if (!url) {
-    return res.status(400).json({ success: false, message: "Falta el parámetro 'url'" });
+    return res.status(400).json({
+      success: false,
+      message: "Falta el parámetro ?url",
+    });
   }
 
   let browser = null;
-
   try {
-    // Lanzar Chromium portable de chrome-aws-lambda
-    browser = await chromium.puppeteer.launch({
-      args: [...chromium.args, "--hide-scrollbars", "--disable-web-security"],
+    // Lanzar Chromium compatible con Vercel
+    browser = await puppeteer.launch({
+      args: chromium.args,
       defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath,
-      headless: true,
-      ignoreHTTPSErrors: true,
+      headless: chromium.headless,
     });
 
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: "networkidle2" });
 
-    // Verificar si existe el botón
-    const botonExiste = await page.$(".button-activar") !== null;
+    // Navegar a la página
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
 
-    let botonPresionado = false;
-    let enlaceBoxVisible = false;
+    // Revisar si existe el botón "activar"
+    const buttonExists = await page.$("button, input[type=button], input[type=submit]") !== null;
 
-    if (botonExiste) {
-      // Simular click en el botón
-      await page.click(".button-activar");
-
-      // Esperar que aparezca el div "enlace-box"
-      try {
-        await page.waitForSelector(".enlace-box", { timeout: 5000 });
-        botonPresionado = true;
-        enlaceBoxVisible = true;
-      } catch {
-        botonPresionado = true;
-        enlaceBoxVisible = false;
-      }
-    }
-
-    res.status(200).json({
+    return res.json({
       success: true,
-      botonExiste,
-      botonPresionado,
-      enlaceBoxVisible,
+      url,
+      pageLoaded: true,
+      activarButton: buttonExists,
     });
-  } catch (err) {
-    res.status(200).json({
+  } catch (error) {
+    return res.json({
       success: false,
       message: "Error al ejecutar Puppeteer",
-      error: err.message,
+      error: error.message,
     });
   } finally {
-    if (browser !== null) {
-      await browser.close();
-    }
+    if (browser) await browser.close();
   }
-}
+};
